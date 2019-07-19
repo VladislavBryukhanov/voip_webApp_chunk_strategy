@@ -5,18 +5,6 @@ import './App.css';
 import VoipClient from './helpers/voipClient';
 import AudioRecorder from './helpers/audioRecorder';
 
-import firebase from 'firebase/app';
-const firebaseConfig = {
-    apiKey: "AIzaSyB7fz9X8h3qxT8ianOAxZq-XXbxGDnXWNQ",
-    authDomain: "voipweb-aunea.firebaseapp.com",
-    databaseURL: "https://voipweb-aunea.firebaseio.com",
-    projectId: "voipweb-aunea",
-    storageBucket: "",
-    messagingSenderId: "457837724296",
-    appId: "1:457837724296:web:c1aceae25e8f0359"
-};
-firebase.initializeApp(firebaseConfig);
-
 class App extends Component {
     state = {
         listening: false,
@@ -68,24 +56,6 @@ class App extends Component {
 
     stopRecording = () => {
         this.audioRecorder.stop();
-    };
-
-    //________
-
-    startStreaming = () => {
-        navigator.mediaDevices.getUserMedia({ audio: true })
-            .then((stream) => {
-                this.stream = stream;
-
-                const audioUrl = window.URL.createObjectURL(this.stream);
-                const audio = new Audio(audioUrl);
-                audio.play();
-                this.setState({ url: '' + audioUrl });
-            });
-    };
-
-    stopStreaming= () => {
-        this.stream.getTracks()[0].stop();
     };
 
     render() {
