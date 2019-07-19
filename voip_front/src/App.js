@@ -2,154 +2,164 @@ import React, { Component } from 'react';
 import axios from 'axios';
 import * as RecordRTC from 'recordrtc';
 import './App.css';
+import VoipClient from './helpers/voipClient';
+import AudioRecorder from './helpers/audioRecorder';
+
+import firebase from 'firebase/app';
+const firebaseConfig = {
+    apiKey: "AIzaSyB7fz9X8h3qxT8ianOAxZq-XXbxGDnXWNQ",
+    authDomain: "voipweb-aunea.firebaseapp.com",
+    databaseURL: "https://voipweb-aunea.firebaseio.com",
+    projectId: "voipweb-aunea",
+    storageBucket: "",
+    messagingSenderId: "457837724296",
+    appId: "1:457837724296:web:c1aceae25e8f0359"
+};
+firebase.initializeApp(firebaseConfig);
 
 class App extends Component {
-  constructor(props) {
-      super(props);
-
-      this.stream = null;
-      this.mediaRecorder = null;
-  }
-
-
-    componentWillMount() {
-      this.ws = new WebSocket('ws://127.0.0.1:8080/');
-      // this.ws = new WebSocket('ws://10.1.1.234:8080/');
-      this.ws.onmessage = (msg) => {
-          // const audioBlob = new Blob([new Uint8Array(msg.data.buffer.data)]);
-          const audioUrl = URL.createObjectURL(msg.data);
-          const audio = new Audio(audioUrl);
-          audio.play();
-      };
-
-        this.startWebStreaming();//
-    }
-
-  startWebStreaming = () => {
-      navigator.mediaDevices.getUserMedia({audio: true})
-          .then((stream) => {
-              this.stream = stream;
-              this.mediaRecorder = new MediaRecorder(this.stream);
-              this.mediaRecorder.start();
-              let audioChunks = [];
-
-              this.mediaRecorder.ondataavailable = event => {
-                  audioChunks.push(event.data);
-              };
-
-              this.mediaRecorder.onstop = _ => {
-                  const audioBlob = new Blob(audioChunks);
-
-                  // let reqData = new FormData();
-                  // reqData.append('audioBlob', audioBlob);
-                  //
-                  // axios.post('http://127.0.0.1:34085/stream', reqData, {
-                  //     headers: {'Content-Type': 'multipart/form-data'}})
-                  //     .then( res => {
-                  //         const audioBlob = new Blob([new Uint8Array(res.data.buffer.data)]);
-                  //         const audioUrl = URL.createObjectURL(audioBlob);
-                  //         const audio = new Audio(audioUrl);
-                  //         audio.play();
-                  //     })
-                  //     .then( _ => {
-                  //         this.mediaRecorder.start();
-                  //     });
-                  this.ws.send(audioBlob);
-                  this.mediaRecorder.start();
-
-                  // let arrayBuffer;
-                  // let fileReader = new FileReader();
-                  // fileReader.onload = (event) => {
-                  //     arrayBuffer = event.target.result;
-                  //     this.ws.send(audioBlob);
-                  // };
-                  // fileReader.readAsArrayBuffer(audioBlob);
-              };
-
-              this.interval = setInterval(() => {
-                  audioChunks = [];
-                  this.mediaRecorder.stop();
-              }, 300);
-          });
-  };
-
-  stopWebStreaming = () => {
-      clearInterval(this.interval);
-      this.stream.getTracks()[0].stop();
-  };
-
-  startRecording = () => {
-      // const  mediaConstraints = {
-      //     video: {
-      //         mandatory: {
-      //             minWidth: 800,
-      //             minHeight: 640
-      //         }
-      //     }, audio: true
-      // };
-      navigator.mediaDevices.getUserMedia({audio: true})
-          .then((stream) => {
-              this.stream = stream;
-              this.mediaRecorder = new MediaRecorder(this.stream);
-              this.mediaRecorder.start();
-              let audioChunks = [];
-
-              this.mediaRecorder.ondataavailable = event => {
-                  audioChunks.push(event.data);
-              };
-
-              this.mediaRecorder.onstop = _ => {
-                  const audioBlob = new Blob(audioChunks);
-                  const audioUrl = URL.createObjectURL(audioBlob);
-                  const audio = new Audio(audioUrl);
-                  audio.play();
-              };
-
-              // setTimeout(() => {
-              //     this.mediaRecorder.stop();
-              // }, 6000);
-          });
+    state = {
+        listening: false,
+        recording: false,
+        websocketUrl: '',
+        notificationMessage: ''
     };
 
-  stopRecording = () => {
-      this.mediaRecorder.stop();
-  };
+    componentWillMount() {
+        VoipClient.requestNotification();
+    }
 
-  startStreaming = () => {
-      navigator.mediaDevices.getUserMedia({audio: true})
-          .then((stream) => {
-              this.stream = stream;
+    onChanged = (e) => {
+        this.setState({ [e.target.name]: e.target.value });
+    };
 
-              const audioUrl = window.URL.createObjectURL(this.stream);
-              const audio = new Audio(audioUrl);
-              audio.play();
-              this.setState({url: '' + audioUrl});
-      });
-  };
+    subscribeWebStream = () => {
+        this.voipClient = new VoipClient(this.state.websocketUrl);
+        this.voipClient.subscribe();
+        this.setState({ listening: true });
+    };
 
-  stopStreaming= () => {
-      this.stream.getTracks()[0].stop();
-  };
+    unsubscribeWebStream = () => {
+        this.voipClient.unsubscribe();
+        this.setState({ listening: false });
+    };
 
-  render() {
-    return (
-      <div className="App">
-          <hr/>
-          <h1>V.O.I.P</h1>
-          <hr/>
-        {/*<input type="file" accept="audio/*;capture=microphone"/>*/}
-        {/*<device type="media"></device>*/}
-        {/*<button onClick={this.startStreaming}> Start streaming </button>*/}
-        {/*<button onClick={this.stopStreaming}> Stop streaming </button>*/}
-        {/*<hr/>*/}
-        {/*<button onClick={this.startRecording}> Start recording </button>*/}
-        {/*<button onClick={this.stopRecording}> Stop recording </button>*/}
-        {/*<hr/>*/}
-        {/*<button onClick={this.startWebStreaming}>Start webStreaming</button>*/}
-        <h2 onClick={this.stopWebStreaming}><a href='#'>disconnect</a></h2>
-      </div>
-    );
-  }
+    startWebStreaming = async () => {
+        await this.voipClient.start();
+        this.setState({ recording: true });
+    };
+
+    stopWebStreaming = () => {
+        this.voipClient.stop();
+        this.setState({ recording: false });
+    };
+
+    sendNotification = () => {
+        this.voipClient.sendNotification(this.state.notificationMessage);
+        this.setState({ notificationMessage: '' });
+    };
+
+    // _________
+
+    startRecording = async () => {
+        this.audioRecorder = new AudioRecorder();
+        await this.audioRecorder.start();
+    };
+
+    stopRecording = () => {
+        this.audioRecorder.stop();
+    };
+
+    //________
+
+    startStreaming = () => {
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then((stream) => {
+                this.stream = stream;
+
+                const audioUrl = window.URL.createObjectURL(this.stream);
+                const audio = new Audio(audioUrl);
+                audio.play();
+                this.setState({ url: '' + audioUrl });
+            });
+    };
+
+    stopStreaming= () => {
+        this.stream.getTracks()[0].stop();
+    };
+
+    render() {
+        return (
+            <div className="App">
+                <hr/>
+                <h1>V.O.I.P</h1>
+                <hr/>
+                <input
+                    onChange={this.onChanged}
+                    name="websocketUrl"
+                    value={this.state.websocketUrl}
+                    placeholder="Websocket Url"/>
+                <br/>
+                {
+                    this.state.listening ?
+                        <button onClick={this.unsubscribeWebStream}>
+                            Stop listening to the conversation
+                        </button>
+                        :
+                        <button
+                            onClick={this.subscribeWebStream}
+                            disabled={!this.state.websocketUrl}
+                        >
+                            Start listening to the conversation
+                        </button>
+                }
+                {
+                    this.state.recording ?
+                        <button
+                            disabled={!this.state.recording}
+                            onClick={this.stopWebStreaming}
+                        >
+                            Stop recording and streaming voice
+                        </button>
+                        :
+                        <button
+                            onClick={this.startWebStreaming}
+                            disabled={!this.state.listening}
+                        >
+                            Start recording and streaming voice
+                        </button>
+                }
+
+                <br/>
+                <input
+                    onChange={this.onChanged}
+                    name="notificationMessage"
+                    disabled={!this.state.listening}
+                    value={this.state.notificationMessage}
+                    placeholder="Type your message"/>
+                <button
+                    onClick={this.sendNotification}
+                    disabled={!this.state.notificationMessage}
+                >
+                    Send notification
+                </button>
+
+                <hr/>
+
+
+                <div>
+                    <h1>Audio Recorder</h1>
+                    <hr/>
+                    <button onClick={this.startRecording}> Start recording </button>
+                    <button onClick={this.stopRecording}> Stop recording </button>
+                </div>
+
+                <hr/>
+                {/*<input type="file" accept="audio/*;capture=microphone"/>*/}
+                {/*<device type="media"></device>*/}
+            </div>
+        );
+    }
 }
 
 export default App;
